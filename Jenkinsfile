@@ -2,7 +2,7 @@ pipeline {
     agent { label 'docker react netflix' }
 
     environment{
-        IMAGE_NAME = 'netflix-app'
+        DOCKER_IMAGE = 'cloudcrates/netflix-app'
         CONTAINER_NAME = 'netflix-app-container'
     }
 
@@ -17,23 +17,28 @@ pipeline {
             steps {
                 script {
                     // Build the image and store as a Docker image object
-                    image = docker.build("${IMAGE_NAME}:latest")
+                    dockerImage = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
                 }
             }
         } 
 
-        stage('Run Docker Container') {
+        stage('Push Image') {
             steps {
                 script {
-                    // Stop and remove previous container if exists
-                    sh "docker stop ${CONTAINER_NAME} || true"
-                    sh "docker rm ${CONTAINER_NAME} || true"
-
-                    // Run the new container
-                    sh "docker run -d -p 3000:80 --name ${CONTAINER_NAME} ${IMAGE_NAME}:latest"
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-creds') {
+                        dockerImage.push()
+                    }
                 }
             }
         } 
+
+        stage('Deploy Container') {
+            steps {
+                sh "docker stop ${CONTAINER_NAME} || true"
+                sh "docker rm ${CONTAINER_NAME} || true"
+                sh "docker run -d -p 3000:80 --name ${CONTAINER_NAME} ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+            }
+        }
     }
 
     post {
